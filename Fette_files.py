@@ -116,7 +116,7 @@ def crear_velocitat_i_guardar(ruta_csv,dir_sortida=None):
     #df = df.drop(columns=['diff_prod', 'diff_seg'])            
     #si no hi han errors guardem l arxiu amb nova extensio i en e
     # el directori de sortida escollit o en el mateix directori si no s ha escollit cap directori de sortida
-    ruta_nova = get_nom_sortida(ruta_csv, dir_sortida=dir_sortida)
+    ruta_nova = get_nom_sortida(ruta_csv, dir_sortida=dir_sortida) 
     #guardem l arxiu amb el nom creat
     df.to_csv(ruta_nova, index=False, sep=';', decimal=',', encoding='utf-8')
     return ruta_nova
@@ -198,10 +198,10 @@ def main_gui():
     # Input box per seleccionar el filtr del csv, per defecte 
     tk.Label(root, text="Filtre dels csv:").pack(anchor="w", padx=10, pady=(15,2))
     frame_ext = tk.Frame(root)
-    frame_ext.pack(fill="x", padx=10)
+    frame_ext.pack(fill="x", padx=12)
     entry_ext = tk.Entry(frame_ext, width=35)
     entry_ext.insert(0, "_P1_.csv")
-    entry_ext.pack(side="left", fill="x", expand=True)
+    entry_ext.pack(side="left")
     
     entry_path.insert(0, r"C:\Proves Albert")
     
@@ -230,8 +230,8 @@ def main_gui():
         try:
             nous = list(map(func_amb_sortida, vector))  
             messagebox.showinfo("Fet - MAP ràpid", f"S'han tractat {len(nous)} arxius amb MAP.\nGuardats com *_P1_V.csv")
-            root.destroy()
             return
+            root.destroy() #mato el quadre de dialeg inicial
         except Exception:
             # Si map falla mirem quins fallen SENSE borrar els ja creats
             arxius_error = []
@@ -294,4 +294,6 @@ def main_gui():
 # la funcio main_gui()
 
 if __name__ == "__main__":
+    from multiprocessing import freeze_support
+    freeze_support() # obligatori per .pyw a Windows
     main_gui()
