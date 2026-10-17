@@ -19,8 +19,10 @@ import os
 import glob
 from pathlib import Path
 import pandas as pd
+import numpy as np
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from functools import partial
 
 #------------------------------------------------------------------------------------------------
 
@@ -44,30 +46,36 @@ def crear_vector_arxius(directori, filtre):
 #--------------------------------------------------------------------------------------------
 
 #FUNCIO 2: Helper Funcio per modificar el nom de l arxius a _P1_v.si s ha afegit la velocitat
+#i guardarlo en el directori de sortida escollit o en el mateix directori si no s ha escollit cap directori de sortida
 
 #--------------------------------------------------------------------------------------------
 
-def get_nom_sortida(ruta_csv):
+def get_nom_sortida(ruta_csv, dir_sortida=None):
     p = Path(ruta_csv)
     if "_P1_.csv" in p.name:
-        return p.with_name(p.name.replace("_P1_.csv", "_P1_V.csv"))
+        nou_nom = p.name.replace("_P1_.csv", "_P1_V.csv")
     else:
-        return p.with_name(p.stem + "_V.csv" if not p.stem.endswith("_") else p.stem + "V.csv")
-        #que fa si no _P1_.csv???
+        nou_nom = p.stem + "_V.csv"
+    
+    if dir_sortida:  #Si s ha escollit un directori de sortida, el guardem allà
+        return Path(dir_sortida) / nou_nom
+    else: #si no s ha escollit cap directori de sortid
+            #el guardem en el mateix directori que l arxiu original
+        return p.with_name(nou_nom)
 #---------------------------------------------------------------------------------------------
 
 #FUNCIO 3: Funcio per modificar UN UNIC csv afegint columna i calculant velocitat i GUARDAR 
 
 #---------------------------------------------------------------------------------------------
 
-def crear_velocitat_i_guardar(ruta_csv):
+def crear_velocitat_i_guardar(ruta_csv,dir_sortida=None):
     
     linia_cap, enc = trobar_capcalera_i_encoding(ruta_csv)
     df = llegir_csv_segur(ruta_csv, linia_cap, enc)
     
-    #---Amb pandas llegim i tractem el csv si l hem pogut obrir i trobar capçaler
+    #---Amb pandas readcsv llegim i tractem el csv si l hem pogut obrir i trobar capçaler
     
-    try: #Llegir l arxiu el separador son ; si canvia a , caldria canviar-o
+    try: #Llgeir l arxiu el separador son ; si canvia a , caldria canviar-o
         df = pd.read_csv(ruta_csv, skiprows=linia_cap, sep=';', decimal=',', encoding='utf-8', engine='python')
     except:
         df = pd.read_csv(ruta_csv, skiprows=linia_cap, sep=';', decimal=',', encoding='latin1', engine='python')
@@ -78,31 +86,37 @@ def crear_velocitat_i_guardar(ruta_csv):
     col_prod = [c for c in df.columns if 'Prod' in c][0]
     
         #Psem la columna de dates de string a datetime per poder calcular
-        
+
+# data a datetime
     df['datetime'] = pd.to_datetime(df[col_fecha].astype(str) + ' ' + df[col_hora].astype(str),
-                                    format='%d.%m.%Y %H:%M:%S', errors='coerce', dayfirst=True)
+                                format='%d.%m.%Y %H:%M:%S', errors='coerce', dayfirst=True)
+
     if df['datetime'].isna().all():
-        df['datetime'] = pd.to_datetime(df[col_fecha].astype(str) + ' ' + df[col_hora].astype(str), dayfirst=True, errors='coerce')
+        df['datetime'] = pd.to_datetime(df[col_fecha].astype(str) + ' ' + df[col_hora].astype(str),
+                                    dayfirst=True, errors='coerce')
 
     df = df.dropna(subset=['datetime']).sort_values('datetime').reset_index(drop=True)
-        #Pasem la columna de produccio a nuemric per poder fer calculs
-    df[col_prod] = pd.to_numeric(df[col_prod], errors='coerce')
-        #Creem las columnes de velocitat en segons i en hores
-    df['velocidad'] = pd.NA
-    df['velocidad_pzas_h'] = pd.NA
-        #Calcul de la velocitat amb un bucle
-    for i in range(1, len(df)):
-        diff_prod = df.loc[i, col_prod] - df.loc[i-1, col_prod]
-        #Diferncies entre fila  i fila anterior del temps expresat en segons
-        diff_seg = (df.loc[i, 'datetime'] - df.loc[i-1, 'datetime']).total_seconds()
-        #Per evitar errors nomes calculem velocitats si t=0 o prod=NA
-        if diff_seg != 0 and pd.notna(diff_prod):
-            df.loc[i, 'velocidad'] = diff_prod / diff_seg
-            df.loc[i, 'velocidad_pzas_h'] = abs(diff_prod * 1000) / (diff_seg / 3600)
-            
-    #si no hi han errors guardem l arxiu amb nova extensio
-    #primer creem el nom d l arxiu amb la funcio
-    ruta_nova = get_nom_sortida(ruta_csv)
+
+    # producció a numèric - amb coma europaea tambe
+    df[col_prod] = pd.to_numeric(df[col_prod].astype(str).str.replace(',', '.'), errors='coerce')
+
+    # --- Fem les diferencies amb la cel.la anterior ---
+    df['diff_prod'] = df[col_prod].diff()*1000
+    df['diff_seg'] = df['datetime'].diff().dt.total_seconds()
+    #-----creem les columnes de velocitat i velocitat_pzas_h amb valors nans
+    df['velocidad'] = np.nan
+    df['velocidad_pzas_h'] = np.nan
+    #-Concio d us de les diferencies per calcular la velocitat i velocitat_pzas_h
+    mask = (df['diff_seg'] != 0) & df['diff_seg'].notna() & df['diff_prod'].notna()
+    #---Calculem la velocitat i velocitat_pzas_h amb les condicions de la mascara
+    df.loc[mask, 'velocidad'] = df.loc[mask, 'diff_prod'] / df.loc[mask, 'diff_seg']
+    df.loc[mask, 'velocidad_pzas_h'] = (df.loc[mask, 'diff_prod'].abs()) / (df.loc[mask, 'diff_seg'] / 3600)
+
+    # opcional, esborra les columnes auxiliars
+    #df = df.drop(columns=['diff_prod', 'diff_seg'])            
+    #si no hi han errors guardem l arxiu amb nova extensio i en e
+    # el directori de sortida escollit o en el mateix directori si no s ha escollit cap directori de sortida
+    ruta_nova = get_nom_sortida(ruta_csv, dir_sortida=dir_sortida)
     #guardem l arxiu amb el nom creat
     df.to_csv(ruta_nova, index=False, sep=';', decimal=',', encoding='utf-8')
     return ruta_nova
@@ -148,55 +162,75 @@ def llegir_csv_segur(ruta_csv, linia_cap, encoding_detectat, nrows=None):
 
 #-----------------------------------------------------------------------------------------------------
 
-#--Finestra inicial------------
-def main_gui():
-    root = tk.Tk()
-    root.title("Càlcul de velocitats Fette")
-    root.geometry("580x230")
-    root.resizable(False, False)
 
+def main_gui():
+    root = tk.Tk() #--crea i disenya finestra inicial------------
+    root.title("Càlcul de velocitats Fette")
+    root.geometry("380x280")
+    root.resizable(False, False)
+    
+    # Input box per seleccionar direcctori de entrada, 
     tk.Label(root, text="Directori on hi ha els arxius:").pack(anchor="w", padx=10, pady=(15,2))
     frame_path = tk.Frame(root)
     frame_path.pack(fill="x", padx=10)
-    entry_path = tk.Entry(frame_path, width=55)
+    entry_path = tk.Entry(frame_path, width=30)
     entry_path.pack(side="left", fill="x", expand=True)
-    def triar_directori():
-        dir_sel = filedialog.askdirectory(title="Selecciona directori on hi ha els CSV")
-        if dir_sel:
+    def triar_directori_entrada():
+        dir_sel_entr = filedialog.askdirectory(title="Selecciona directori d´entrada on hi ha els CSV")
+        if dir_sel_entr:
             entry_path.delete(0, tk.END)
-            entry_path.insert(0, dir_sel)
-    tk.Button(frame_path, text="Acceptar", command=triar_directori).pack(side="left", padx=5)
-
+            entry_path.insert(0, dir_sel_entr)
+    tk.Button(frame_path, text="Seleccionar", command=triar_directori_entrada).pack(side="left", padx=5)
+    
+    # Input box per seleccionar direcctori de sortida, si es deixa buit es guardara en el mateix directori
+    tk.Label(root, text="Directori de sortida (buit = mateixa carpeta):").pack(anchor="w", padx=10, pady=(10,2))
+    frame_sortida = tk.Frame(root)
+    frame_sortida.pack(fill="x", padx=10)
+    entry_sortida = tk.Entry(frame_sortida, width=35)
+    entry_sortida.pack(side="left", fill="x", expand=True)
+    def triar_directori_sortida():
+        dir_sel = filedialog.askdirectory(title="Selecciona directori de SORTIDA")
+        if dir_sel:
+            entry_sortida.delete(0, tk.END)
+            entry_sortida.insert(0, dir_sel)
+    tk.Button(frame_sortida, text="Seleccionar", command=triar_directori_sortida).pack(side="left", padx=5)
+    
+    # Input box per seleccionar el filtr del csv, per defecte 
     tk.Label(root, text="Filtre dels csv:").pack(anchor="w", padx=10, pady=(15,2))
     frame_ext = tk.Frame(root)
     frame_ext.pack(fill="x", padx=10)
-    entry_ext = tk.Entry(frame_ext, width=55)
+    entry_ext = tk.Entry(frame_ext, width=35)
     entry_ext.insert(0, "_P1_.csv")
     entry_ext.pack(side="left", fill="x", expand=True)
-    entry_path.insert(0, r"C:\Python311")
+    
+    entry_path.insert(0, r"C:\Proves Albert")
+    
     #----S executa al apretar el boto verd d execucio
     def accio_ok():
         directori = entry_path.get().strip()
         filtre = entry_ext.get().strip() or "_P1_.csv"
+        dir_sortida = entry_sortida.get().strip() or None  # NOU - llegir so
         if not directori or not Path(directori).exists():
             messagebox.showerror("Error", "Has de seleccionar un directori vàlid", parent=root)
             return
-
-        root.withdraw()
+        root.withdraw() # Amaguem la finestra principal mentre es processa
+        
         vector = crear_vector_arxius(directori, filtre) # Eexecutem la funcio 1 vector arxius
 
         if not vector:   # Si no trova arxius amb l extensio
             messagebox.showwarning("Cap arxiu", f"No s'ha trobat cap arxiu amb extesio '{filtre}' a:\n{directori}")
-            root.deiconify()
+            root.deiconify() # Fem apareixer la finestra principal de nou
             return
 
         messagebox.showinfo("Arxius trobats", f"S'han trobat {len(vector)} arxius amb l'extensió '{filtre}'.\n\nClica OK per continuar amb el càlcul de velocitat.")
 
+        func_amb_sortida = partial(crear_velocitat_i_guardar, dir_sortida=dir_sortida)  # Funció amb el directori de sortida fixat
+        
         # Intent ràpid amb MAP
         try:
-            nous = list(map(crear_velocitat_i_guardar, vector))
+            nous = list(map(func_amb_sortida, vector))  
             messagebox.showinfo("Fet - MAP ràpid", f"S'han tractat {len(nous)} arxius amb MAP.\nGuardats com *_P1_V.csv")
-            root.deiconify()
+            root.destroy()
             return
         except Exception:
             # Si map falla mirem quins fallen SENSE borrar els ja creats
@@ -243,7 +277,7 @@ def main_gui():
             messagebox.showinfo("Fet - Mode lent", 
                 f"S'han tractat {ok_count} de {len(vector)} arxius. \n\nErrors finals ({len(errors_finals)}):\n" + "\n".join(errors_finals[:20])
             )
-            root.deiconify()
+            root.destroy()
 
     def accio_sortir():
         root.destroy()
@@ -255,6 +289,9 @@ def main_gui():
     tk.Button(frame_botons, text="Sortir", command=accio_sortir, width=12, height=2, bg="#f44336", fg="white", font=("Arial", 10, "bold")).pack(side="left", padx=10)
 
     root.mainloop()
+
+#Execucio d inici del programa si es executa directament l aprimera funcio que s executa es
+# la funcio main_gui()
 
 if __name__ == "__main__":
     main_gui()
