@@ -249,7 +249,7 @@ def main_gui():
         root.withdraw() # Amaguem la finestra principal mentre es processa
         finestra_tancada = False
         try:
-            vector = crear_vector_arxius(directori, filtre)
+            vector = crear_vector_arxius(directori, filtre) #creem el vector amb els arxius que compleixen amb el filtre
 
             if not vector:
                 messagebox.showwarning(
@@ -269,7 +269,8 @@ def main_gui():
             arxius_error = []
             ok_count = 0
             omesos_count = 0
-
+            # Amb el bucle for recorrem el vector amb els arxius que compleixen amb el filtre i 
+            #   cridem la funcio crear_velocitat_i_guardar
             for ruta in vector:
                 desti = get_nom_sortida(
                     ruta,
@@ -287,7 +288,7 @@ def main_gui():
                     )
                     ok_count += 1
                 except Exception as exc:
-                    arxius_error.append(
+                    arxius_error.append( # anem omplint el vector amb els errors que es produeixen en el procesament dels arxius
                         f"{Path(ruta).name}: {type(exc).__name__}: {exc}"
                     )
 
