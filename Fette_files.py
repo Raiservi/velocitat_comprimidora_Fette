@@ -107,16 +107,16 @@ def llegir_csv_segur(ruta_csv, linia_cap, encoding_detectat, nrows=None):
     
 #---------------------------------------------------------------------------------------------
   
-  #FUNCIO 4: Helper Funcio per extreure el nom del producte del nom
+  #FUNCIO 4: Helper Per extreure el nom del producte del nom
   # del fitxer per crear/ en carpeta de nom de producte 
   
 #----------------------------------------------------------------------------------------------
     
 def extreure_producte(filename: str) -> str:
-    # entre _ o espacio, 5 letras seguidas
+    # busquem 5 lletres seguides amb regex de entre _ o espai, 
     tokens = re.findall(r'(?:^|_|\s)([A-Za-z]{5,})(?=_|\s|$)', filename)
     if not tokens:
-        return "DESCONOCIDO"
+        return "DESCONEGUT"
     # El més llarg i les primeres 7 lletres -> RUPATADINA i RUPATADINE = RUPATAD
     producto = max(tokens, key=len)
     return producto[:7].upper()
@@ -137,6 +137,7 @@ def get_nom_sortida(ruta_csv, dir_sortida=None, directori_entrada=None):
     nou_nom = p.stem + SUFIX_FITXER_SORTIDA + ".csv"  # posa el sufix al nom de sortida
 
     # Si s ha triat una carpeta de sortida, hi guardem el resultat con objecte path.
+    #A mes afegim la carpeta del producte a la ccarpeta de sortida
     if dir_sortida:
         carpeta_sortida = Path(dir_sortida) / extreure_producte(p.stem)
         # Conservem les subcarpetes d origen per evitar xocs de noms si hi han subcarpetes amb el mateix nom de fitxer. 
