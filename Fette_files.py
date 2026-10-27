@@ -254,6 +254,9 @@ def crear_dataframe_velocitat(ruta_csv, linia_cap, encoding_detectat):
     if idx_peso is not None:
         columnes_a_eliminar = []
         for columna in df.columns[idx_peso:]:
+            # NUEVO: datetime debe conservarse aunque el dataframe quede vacío.
+            if columna == 'datetime':
+                continue
             text = df[columna].astype('string').str.strip()
             es_buit = text.isna() | text.eq('') # condicio llarga de string
             valors_numerics = pd.to_numeric( 
@@ -295,27 +298,11 @@ def crear_dataframe_velocitat(ruta_csv, linia_cap, encoding_detectat):
     # Eliminem les columnes temporals abans d'afegir la fila especial E, que no les utilitza.
     df = df.drop(columns=['datetime', 'diff_prod', 'diff_seg'])
 
-    # Calculem les velocitats de la fila E a partir de la seva Produccion
-    # dividida pel seu temps; la segona velocitat expressa el resultat per hora.
+    # La fila especial E te calculat com a promitg la velocitat de totes les velocitats del dataframe
     if fila_especial is not None:
         fila_especial = fila_especial.reindex(df.columns)
-        produccio_e = pd.to_numeric(
-            str(fila_especial[col_prod]).strip().replace(',', '.'),
-            errors='coerce',)*1000 # passem  la produccio a numeric
-        #El temps pel calcul de velocitats calpasar-lo a numeric
-        temps_e_text = str(fila_especial[col_hora]).strip()
-        temps_e = pd.to_numeric(temps_e_text.replace(',', '.'), errors='coerce')
-        if pd.isna(temps_e):
-            temps_e = pd.to_timedelta(temps_e_text, errors='coerce')
-            temps_e = temps_e.total_seconds() if not pd.isna(temps_e) else np.nan
-        if pd.isna(produccio_e) or pd.isna(temps_e) or temps_e == 0:
-            raise ValueError(
-                "No es poden calcular les velocitats de la fila ID=E: "
-                "Produccion o Tiempo/Hora no es valid."
-            )
-
-        fila_especial['velocidad'] = round(produccio_e / temps_e, 2)
-        fila_especial['velocidad_pzas_h'] = round(abs(produccio_e) * 3600 / temps_e, 2)
+        fila_especial['velocidad'] = round(df['velocidad'].mean(), 2)
+        fila_especial['velocidad_pzas_h'] = round(df['velocidad_pzas_h'].mean(), 2)
     # ATENCIOOO: retornem la fila E separada perquè només es gestioni una vegada en desar.
     return df, fila_especial
 
