@@ -276,33 +276,35 @@ def crear_dataframe_velocitat(ruta_csv, linia_cap, encoding_detectat):
     df['diff_seg'] = df['datetime'].diff().dt.total_seconds()
     
     #-----creem les columnes de velocitat i velocitat_pzas_h amb valors nans
-    df['velocidad'] = np.nan
-    df['velocidad_pzas_h'] = np.nan
+    df['Velocitat_comp_seg'] = np.nan
+    df['Velocitat_comp_h'] = np.nan
     
     #-Concio d us de les diferencies per calcular la velocitat i velocitat_pzas_h
     mask = (df['diff_seg'] != 0) & df['diff_seg'].notna() & df['diff_prod'].notna()
     
     #---Calculem la velocitat i velocitat_pzas_h amb les condicions de la mascara
-    df.loc[mask, 'velocidad'] = df.loc[mask, 'diff_prod'] / df.loc[mask, 'diff_seg']
-    df.loc[mask, 'velocidad_pzas_h'] = (df.loc[mask, 'diff_prod'].abs()) / (df.loc[mask, 'diff_seg'] / 3600)
+    df.loc[mask, 'Velocitat_comp_seg'] = df.loc[mask, 'diff_prod'] / df.loc[mask, 'diff_seg']
+    df.loc[mask, 'Velocitat_comp_h'] = (df.loc[mask, 'diff_prod'].abs()) / (df.loc[mask, 'diff_seg'] / 3600)
 
     #  l Albert demana aixo: la primera fila no te diferencia anterior, per tant rep les velocitats
     # calculades a la segona fila i no queda amb els camps buits.
     if len(df) > 1:
-        df.loc[df.index[0], 'velocidad'] = df.loc[df.index[1], 'velocidad']
-        df.loc[df.index[0], 'velocidad_pzas_h'] = df.loc[df.index[1], 'velocidad_pzas_h']
+        df.loc[df.index[0], 'Velocitat_comp_seg'] = df.loc[df.index[1], 'Velocitat_comp_seg']
+        df.loc[df.index[0], 'Velocitat_comp_h'] = df.loc[df.index[1], 'Velocitat_comp_h']
 
     # Arrodonim les dues columnes de velocitat a dues xifres decimals.
-    df[['velocidad', 'velocidad_pzas_h']] = df[['velocidad', 'velocidad_pzas_h']].round(2)
-
+    df[['Velocitat_comp_seg']] = df[['Velocitat_comp_seg']].round(2)
+    df[['Velocitat_comp_h']] = df[['Velocitat_comp_h']].round(0)
+    
     # Eliminem les columnes temporals abans d'afegir la fila especial E, que no les utilitza.
     df = df.drop(columns=['datetime', 'diff_prod', 'diff_seg'])
 
     # La fila especial E te calculat com a promitg la velocitat de totes les velocitats del dataframe
     if fila_especial is not None:
         fila_especial = fila_especial.reindex(df.columns)
-        fila_especial['velocidad'] = round(df['velocidad'].mean(), 2)
-        fila_especial['velocidad_pzas_h'] = round(df['velocidad_pzas_h'].mean(), 2)
+        fila_especial['Velocitat_comp_seg'] = round(df['Velocitat_comp_seg'].mean(), 2)
+        fila_especial['Velocitat_comp_h'] = round(df['Velocitat_comp_h'].mean(),0)
+        
     # ATENCIOOO: retornem la fila E separada perquè només es gestioni una vegada en desar.
     return df, fila_especial
 
